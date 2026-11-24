@@ -10,7 +10,7 @@
   'use strict';
   var SB = window.SB, S = SB.S, PG = SB.PG, V = SB.V, API = window.API;
   var $ = SB.$, $$ = SB.$$, esc = SB.esc, ic = SB.ic, toast = SB.toast, sleep = SB.sleep;
-  var ROUTES = ['dashboard', 'peserta', 'template', 'broadcast', 'progres', 'riwayat', 'pengaturan'];
+  var ROUTES = ['dashboard', 'peserta', 'template', 'broadcast', 'progres', 'riwayat', 'pengaturan', 'agenda'];
   var ACT = {}, IN = {}, CH = {};
   var pending = 0; // jumlah operasi tulis yang belum dikonfirmasi server
 
@@ -19,7 +19,7 @@
   function persist() {
     clearTimeout(tPersist);
     tPersist = setTimeout(function () {
-      API.LS.set('sb_data', { user: S.user, settings: S.settings, rahasia: S.rahasia, peserta: S.peserta, template: S.template, kampanye: S.kampanye, v: SB.versi });
+      API.LS.set('sb_data', { user: S.user, settings: S.settings, rahasia: S.rahasia, peserta: S.peserta, template: S.template, kampanye: S.kampanye, agenda: S.agenda, v: SB.versi });
     }, 250);
   }
   function jeda(fn, ms) { var t; return function () { var a = arguments, c = this; clearTimeout(t); t = setTimeout(function () { fn.apply(c, a); }, ms); }; }
@@ -45,6 +45,7 @@
       if (id && id !== PG.id) setPG(id); else if (!PG.id || !S.kampanye.some(function (k) { return k.id === PG.id; })) setPG(pgDefault());
     }
     if (!S.loaded) { $('#view').innerHTML = '<div class="skel" style="height:60px"></div><div class="skel" style="height:220px"></div><div class="skel" style="height:300px"></div>'; navSet(); return; }
+    if (c.r === 'agenda') agDefault();
     $('#view').innerHTML = V[c.r]();
     if (lastRoute !== c.r) { $('#main').scrollTop = 0; lastRoute = c.r; }
     navSet(); chip();
@@ -111,6 +112,7 @@
     if (r.peserta) S.peserta = r.peserta;
     if (r.template) S.template = r.template;
     if (r.kampanye) S.kampanye = r.kampanye;
+    if (r.agenda) S.agenda = r.agenda;
     if (r.v) SB.versi = r.v;
     S.loaded = true;
     persist(); sinkronHeader();
@@ -255,7 +257,7 @@
     API.call('logout').catch(function () {});
     API.setToken('');
     ['sb_data', 'sb_riw'].forEach(API.LS.del);
-    S.loaded = false; S.riwayat = null; S.peserta = []; S.template = []; S.kampanye = []; S.gw = null; setPG(null);
+    S.loaded = false; S.riwayat = null; S.peserta = []; S.template = []; S.kampanye = []; S.agenda = []; S.gw = null; setPG(null);
     showLogin();
   }
   API.onAuthLost = function () { if (S.loggedIn) { API.setToken(''); showLogin('Sesi berakhir, silakan masuk lagi.'); } };
@@ -324,12 +326,14 @@
     if (s.indexOf('0') === 0) s = '62' + s.slice(1); else if (s.indexOf('8') === 0) s = '62' + s;
     return s;
   }
+  function emailOk(s) { return /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]{2,}$/.test(s); }
   function noValid(s) { return /^628\d{8,12}$/.test(s); }
   ACT.pesSimpan = async function (el) {
     var id = el.getAttribute('data-id'), err = $('#pmErr');
-    var d = { id: id || undefined, nama: $('#pmNama').value.trim(), nomor: normNo($('#pmNomor').value), grup: $('#pmGrup').value.trim() || 'Umum', status: $('#pmStatus').value };
+    var d = { id: id || undefined, nama: $('#pmNama').value.trim(), nomor: normNo($('#pmNomor').value), grup: $('#pmGrup').value.trim() || 'Umum', status: $('#pmStatus').value, email: ($('#pmEmail').value || '').trim().toLowerCase() };
     var tampilErr = function (m) { err.textContent = m; err.classList.remove('hide'); };
     if (!noValid(d.nomor)) return tampilErr('Nomor WA tidak valid. Contoh: 081234567890');
+    if (d.email && !emailOk(d.email)) return tampilErr('Format email tidak valid. Contoh: budi@gmail.com');
     if (S.peserta.some(function (p) { return p.nomor === d.nomor && p.id !== id; })) return tampilErr('Nomor ini sudah terdaftar.');
     var prev = S.peserta.slice(), tmp = id || 'tmp_' + Date.now();
     var item = Object.assign({ dibuat: new Date().toISOString() }, d, { id: tmp });
@@ -373,8 +377,8 @@
     if (!aoa.length) return [];
     var f = aoa[0].map(function (c) { return String(c || '').trim().toLowerCase(); });
     var cari = function (re) { for (var i = 0; i < f.length; i++) if (re.test(f[i])) return i; return -1; };
-    var iN = cari(/^(nama|name)/), iP = cari(/(nomor|^no\.?$|^hp|wa$|whatsapp|telepon|phone|^tel)/), iG = cari(/(grup|group|segmen|kelas|kategori)/);
-    var data = aoa, header = iN > -1 || iP > -1;
+    var iE = cari(/(e-?mail|surel)/), iN = cari(/^(nama|name)/), iP = cari(/(nomor|^no\.?$|^hp|wa$|whatsapp|telepon|phone|^tel)/), iG = cari(/(grup|group|segmen|kelas|kategori)/);
+    var data = aoa, header = iN > -1 || iP > -1 || iE > -1;
     if (header) data = aoa.slice(1);
     var hpLike = function (v) { var s = String(v || '').trim(); return /^[\d\s+\-().]+$/.test(s) && s.replace(/\D/g, '').length >= 8; };
     if (iP < 0) {
@@ -382,21 +386,31 @@
       for (var c = 0; c < ncol; c++) { var cnt = data.filter(function (r) { return hpLike(r[c]); }).length; if (cnt > bc) { bc = cnt; best = c; } }
       iP = best;
     }
+    if (iE < 0) {   // tanpa header email: cari kolom yang isinya paling banyak berformat email
+      var nc = Math.max.apply(null, aoa.map(function (r) { return r.length; })), be = -1, bn = 0;
+      for (var e = 0; e < nc; e++) { var ce = data.filter(function (r) { return emailOk(String(r[e] || '').trim()); }).length; if (ce > bn) { bn = ce; be = e; } }
+      iE = be;
+    }
     if (iP < 0) return [];
-    var sisa = []; for (var j = 0; j < Math.max.apply(null, aoa.map(function (r) { return r.length; })); j++) if (j !== iP) sisa.push(j);
+    var sisa = []; for (var j = 0; j < Math.max.apply(null, aoa.map(function (r) { return r.length; })); j++) if (j !== iP && j !== iE) sisa.push(j);
     if (iN < 0) iN = sisa[0] !== undefined ? sisa[0] : -1;
     if (iG < 0) { iG = sisa.filter(function (x) { return x !== iN; })[0]; if (iG === undefined) iG = -1; }
-    return data.map(function (r) { return { nama: iN > -1 ? String(r[iN] || '').trim() : '', nomor: r[iP], grup: iG > -1 ? String(r[iG] || '').trim() : '' }; });
+    return data.map(function (r) { return { nama: iN > -1 ? String(r[iN] || '').trim() : '', nomor: r[iP], grup: iG > -1 ? String(r[iG] || '').trim() : '', email: iE > -1 ? String(r[iE] || '').trim().toLowerCase() : '' }; });
   }
   function periksaImpor(rows, namaFile) {
-    var ada = {}; S.peserta.forEach(function (p) { ada[p.nomor] = 1; });
-    var valid = [], dup = 0, bad = 0;
+    var ada = {}; S.peserta.forEach(function (p) { ada[p.nomor] = p; });
+    var valid = [], upd = [], dup = 0, bad = 0;
     rows.forEach(function (r) {
-      var no = normNo(r.nomor);
+      var no = normNo(r.nomor), em = emailOk(r.email || '') ? r.email : '';
       if (!noValid(no)) { bad++; return; }
-      if (ada[no]) { dup++; return; }
-      ada[no] = 1; valid.push({ nama: r.nama, nomor: no, grup: r.grup });
+      if (ada[no]) {
+        dup++;
+        if (ada[no].id && !ada[no].email && em) { upd.push({ nama: r.nama, nomor: no, grup: r.grup, email: em }); ada[no] = Object.assign({}, ada[no], { email: em }); }   // lengkapi email peserta lama
+        return;
+      }
+      ada[no] = { email: em }; valid.push({ nama: r.nama, nomor: no, grup: r.grup, email: em });
     });
+    IMP.updList = upd; IMP.upd = upd.length;
     IMP.rows = rows; IMP.valid = valid.length; IMP.dup = dup; IMP.bad = bad; IMP.list = valid; IMP.contoh = valid.slice(0, 2); IMP.namaFile = namaFile;
     IMP.grup = ($('#impGrup') || {}).value || IMP.grup || 'Umum';
     SB.modal(V.modalImport(IMP), { noFocus: true });
@@ -434,16 +448,82 @@
     var ta = $('#pasteImp'); if (ta) ta.value = teks;
   };
   ACT.impSimpan = async function () {
-    if (!IMP.list || !IMP.list.length) return;
-    var grup = ($('#impGrup').value || 'Umum').trim() || 'Umum', rows = IMP.list.map(function (r) { return { nama: r.nama, nomor: r.nomor, grup: r.grup || grup }; });
+    var list = IMP.list || [], updList = IMP.updList || [];
+    if (!list.length && !updList.length) return;
+    var grup = ($('#impGrup').value || 'Umum').trim() || 'Umum', rows = list.map(function (r) { return { nama: r.nama, nomor: r.nomor, grup: r.grup || grup, email: r.email || '' }; });
+    var emailBaru = {}; updList.forEach(function (u) { emailBaru[u.nomor] = u.email; });
     var prev = S.peserta.slice(), now = new Date().toISOString();
-    var tmp = rows.map(function (r, i) { return { id: 'tmp_' + Date.now() + '_' + i, nama: r.nama, nomor: r.nomor, grup: r.grup, status: 'Aktif', dibuat: now }; });
-    S.peserta = S.peserta.concat(tmp); SB.closeModal(); render(); toast(rows.length + ' peserta diimpor, menyimpan ke Sheets…', 'info'); pending++;
+    var tmp = rows.map(function (r, i) { return { id: 'tmp_' + Date.now() + '_' + i, nama: r.nama, nomor: r.nomor, grup: r.grup, status: 'Aktif', dibuat: now, email: r.email }; });
+    rows = rows.concat(updList.map(function (u) { return { nama: u.nama, nomor: u.nomor, grup: u.grup || grup, email: u.email }; }));
+    S.peserta = S.peserta.map(function (p) { return emailBaru[p.nomor] && !p.email ? Object.assign({}, p, { email: emailBaru[p.nomor] }) : p; }).concat(tmp); SB.closeModal(); render(); toast(rows.length + ' peserta diimpor, menyimpan ke Sheets…', 'info'); pending++;
     var r = await API.call('importPeserta', { rows: rows, grup: grup }); pending--;
     if (!r.ok) { S.peserta = prev; render(); return toast(r.message || 'Impor gagal', 'err'); }
     var tmpIds = {}; tmp.forEach(function (t) { tmpIds[t.id] = 1; });
     S.peserta = S.peserta.filter(function (p) { return !tmpIds[p.id]; }).concat(r.items); persist(); render();
-    toast(r.ditambah + ' peserta tersimpan' + (r.duplikat ? ', ' + r.duplikat + ' duplikat dilewati' : ''));
+    toast(r.ditambah + ' peserta tersimpan' + (r.diperbarui ? ', ' + r.diperbarui + ' email dilengkapi' : '') + (r.duplikat - (r.diperbarui || 0) > 0 ? ', ' + (r.duplikat - r.diperbarui) + ' duplikat dilewati' : ''));
+  };
+
+  /* ---------- Agenda ---------- */
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  function keLokal(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + 'T' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+  function agDefault() {
+    if (S.ag.mulai) return;
+    var d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); S.ag.mulai = keLokal(d);
+    d.setHours(10); S.ag.selesai = keLokal(d);
+  }
+  function agInfo() { var e = $('#agInfo'); if (e) e.innerHTML = V.agInfo(); }
+  IN.agJudul = function (t) { S.ag.judul = t.value; };
+  IN.agLokasi = function (t) { S.ag.lokasi = t.value; };
+  IN.agDeskripsi = function (t) { S.ag.deskripsi = t.value; };
+  IN.agMulai = function (t) { S.ag.mulai = t.value; };
+  IN.agSelesai = function (t) { S.ag.selesai = t.value; };
+  CH.agMulai = function (t) {   // selesai otomatis menyusul +1 jam bila tidak lagi setelah mulai
+    var m = new Date(t.value), s = new Date(S.ag.selesai);
+    if (!isNaN(m) && (isNaN(s) || s <= m)) { S.ag.selesai = keLokal(new Date(m.getTime() + 3600e3)); var e = $('[data-in=agSelesai]'); if (e) e.value = S.ag.selesai; }
+  };
+  ACT.agMode = function (el) { S.ag.mode = el.getAttribute('data-m'); render(); };
+  ACT.agGrup = function (el) { var g = el.getAttribute('data-g'), i = S.ag.grup.indexOf(g); if (i > -1) S.ag.grup.splice(i, 1); else S.ag.grup.push(g); render(); };
+  ACT.agRem = function (el) {
+    var m = +el.getAttribute('data-m'), i = S.ag.rem.indexOf(m);
+    if (i > -1) S.ag.rem.splice(i, 1); else if (S.ag.rem.length >= 5) return toast('Maksimal 5 pengingat kalender', 'warn'); else S.ag.rem.push(m);
+    S.ag.rem.sort(function (x, y) { return y - x; }); render();
+  };
+  ACT.agEmail = function (el) { S.ag.email = +el.getAttribute('data-m'); render(); };
+  ACT.agSimpan = async function () {
+    var a = S.ag; if (a.busy) return;
+    if (!a.judul.trim()) return toast('Nama agenda wajib diisi', 'warn');
+    var m = new Date(a.mulai), s = new Date(a.selesai);
+    if (isNaN(m) || isNaN(s)) return toast('Isi waktu mulai dan selesai', 'warn');
+    if (s <= m) return toast('Waktu selesai harus setelah waktu mulai', 'warn');
+    if (m.getTime() < Date.now()) return toast('Waktu mulai sudah lewat', 'warn');
+    if (a.mode === 'grup' && !a.grup.length) return toast('Pilih minimal satu grup', 'warn');
+    var t = SB.tamuHitung();
+    if (!t.n) return toast('Belum ada peserta beremail pada target ini. Lengkapi email di menu Peserta.', 'err');
+    if (t.n > 150) return toast('Maksimal 150 undangan per agenda (target ' + t.n + '). Pilih per grup.', 'err');
+    var d = { judul: a.judul.trim(), deskripsi: a.deskripsi.trim(), lokasi: a.lokasi.trim(), mulai: m.toISOString(), selesai: s.toISOString(), mode: a.mode, grup: a.grup.slice(), pengingat: a.rem.slice(), email_pengingat: a.email };
+    var tmp = { id: 'tmp_' + Date.now(), judul: d.judul, deskripsi: d.deskripsi, lokasi: d.lokasi, mulai: d.mulai, selesai: d.selesai, grup_target: a.mode === 'grup' ? a.grup.join(',') : 'Semua', tamu: t.n, pengingat: (a.rem.length ? a.rem : [60]).join(','), email_pengingat: a.email, email_terkirim: '', event_id: '', status: 'Aktif', dibuat: new Date().toISOString() };
+    S.agenda = [tmp].concat(S.agenda); a.busy = true; render(); toast('Membuat agenda & mengirim undangan…', 'info');
+    pending++; var r = await API.call('simpanAgenda', d); pending--; a.busy = false;
+    if (!r.ok) { S.agenda = S.agenda.filter(function (x) { return x.id !== tmp.id; }); render(); return toast(r.message || 'Gagal membuat agenda', 'err'); }
+    S.agenda = S.agenda.map(function (x) { return x.id === tmp.id ? r.item : x; });
+    Object.assign(a, { judul: '', deskripsi: '', lokasi: '', mulai: '', selesai: '' }); agDefault();
+    persist(); render(); toast('Agenda dibuat — ' + r.tamu + ' undangan dikirim');
+  };
+  ACT.agBatal = async function (el) {
+    var id = el.getAttribute('data-id'), x = S.agenda.filter(function (k) { return k.id === id; })[0]; if (!x) return;
+    if (!await SB.confirm('Batalkan agenda?', 'Agenda "' + x.judul + '" dihapus dari kalender dan peserta menerima pemberitahuan pembatalan.', 'Batalkan Agenda', true)) return;
+    var prev = S.agenda.slice();
+    S.agenda = S.agenda.map(function (k) { return k.id === id ? Object.assign({}, k, { status: 'Dibatalkan' }) : k; }); render(); toast('Agenda dibatalkan'); pending++;
+    var r = await API.call('hapusAgenda', { id: id }); pending--;
+    if (!r.ok) { S.agenda = prev; render(); toast(r.message || 'Gagal membatalkan agenda', 'err'); } else persist();
+  };
+  ACT.agMailSekarang = async function (el) {
+    var id = el.getAttribute('data-id'), x = S.agenda.filter(function (k) { return k.id === id; })[0]; if (!x) return;
+    if (!await SB.confirm('Kirim pengingat email?', 'Email pengingat "' + x.judul + '" dikirim sekarang ke ' + x.tamu + ' peserta.', 'Kirim Sekarang')) return;
+    el.disabled = true; toast('Mengirim email pengingat…', 'info');
+    var r = await API.call('kirimPengingatAgenda', { id: id }); el.disabled = false;
+    if (!r.ok) return toast(r.message || 'Gagal mengirim pengingat', 'err');
+    toast(r.kirim + ' email terkirim' + (r.gagal ? ', ' + r.gagal + ' gagal' : ''), r.gagal ? 'warn' : 'ok');
   };
 
   /* ---------- Template ---------- */
@@ -696,7 +776,7 @@
     if (API.hasToken()) {
       if (cache && cache.peserta) {
         S.user = cache.user || S.user; S.settings = cache.settings || {}; S.rahasia = cache.rahasia || {};
-        S.peserta = cache.peserta; S.template = cache.template || []; S.kampanye = cache.kampanye || []; S.loaded = true; SB.versi = cache.v;
+        S.peserta = cache.peserta; S.template = cache.template || []; S.kampanye = cache.kampanye || []; S.agenda = cache.agenda || []; S.loaded = true; SB.versi = cache.v;
       }
       showApp(); render(); boot(true);
     } else showLogin();

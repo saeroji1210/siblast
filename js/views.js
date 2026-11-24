@@ -119,7 +119,7 @@
     return S.peserta.filter(function (p) {
       if (S.pes.grup && p.grup !== S.pes.grup) return false;
       if (S.pes.status && p.status !== S.pes.status) return false;
-      return !q || (p.nama + ' ' + p.nomor + ' ' + p.grup).toLowerCase().indexOf(q) > -1;
+      return !q || (p.nama + ' ' + p.nomor + ' ' + p.grup + ' ' + (p.email || '')).toLowerCase().indexOf(q) > -1;
     });
   }
   SB.pesFiltered = pesFiltered;
@@ -133,10 +133,10 @@
     var rows = cur.map(function (p) {
       return '<tr><td style="width:44px"><input type="checkbox" class="chk" data-ch="pesSel" data-id="' + esc(p.id) + '"' + (S.pes.sel[p.id] ? ' checked' : '') + '></td>' +
         '<td><div class="cell">' + avatar(p.nama || p.nomor, 36) + '<div class="tx"><b>' + esc(p.nama || '(tanpa nama)') + '</b><small>Ditambahkan ' + tgl(p.dibuat) + '</small></div></div></td>' +
-        '<td class="mono">' + fmtNo(p.nomor) + '</td><td><span class="pill">' + esc(p.grup) + '</span></td><td>' + badge(p.status) + '</td>' +
+        '<td class="mono">' + fmtNo(p.nomor) + '</td><td>' + (p.email ? '<span class="mail">' + esc(p.email) + '</span>' : '<span class="sub">—</span>') + '</td><td><span class="pill">' + esc(p.grup) + '</span></td><td>' + badge(p.status) + '</td>' +
         '<td><div class="acts"><button class="ibtn" title="Ubah" data-act="pesEdit" data-id="' + esc(p.id) + '">' + ic('edit') + '</button><button class="ibtn" title="Hapus" data-act="pesHapus" data-id="' + esc(p.id) + '" style="color:var(--fail)">' + ic('delete') + '</button></div></td></tr>';
     }).join('');
-    return '<div class="tw"><table><thead><tr><th><input type="checkbox" class="chk" data-ch="pesSelAll"' + (allOn ? ' checked' : '') + '></th><th>Peserta</th><th>Nomor WhatsApp</th><th>Grup</th><th>Status</th><th style="text-align:right">Aksi</th></tr></thead><tbody>' + rows + '</tbody></table></div>' + pager(list.length, page, per, 'pesHal');
+    return '<div class="tw"><table><thead><tr><th><input type="checkbox" class="chk" data-ch="pesSelAll"' + (allOn ? ' checked' : '') + '></th><th>Peserta</th><th>Nomor WhatsApp</th><th>Email</th><th>Grup</th><th>Status</th><th style="text-align:right">Aksi</th></tr></thead><tbody>' + rows + '</tbody></table></div>' + pager(list.length, page, per, 'pesHal');
   };
   V.peserta = function () {
     var P = S.peserta, aktif = P.filter(function (p) { return p.status === 'Aktif'; }).length, gl = grupList();
@@ -148,18 +148,19 @@
     var grupOpt = '<option value="">Semua grup</option>' + Array.from(new Set(P.map(function (p) { return p.grup; }))).sort().map(function (g) { return '<option' + (S.pes.grup === g ? ' selected' : '') + '>' + esc(g) + '</option>'; }).join('');
     return pageHead('Daftar Peserta Broadcast', 'Kelola kontak WhatsApp yang menjadi tujuan broadcast Anda.',
       '<button class="btn s" data-act="unduhFormat">' + ic('table_view') + 'Unduh Format CSV</button><button class="btn p" data-act="importBuka">' + ic('upload') + 'Impor Peserta</button>', num(P.length) + ' kontak') + kartu +
-      '<div class="card"><div class="toolbar between" style="justify-content:space-between;margin-bottom:14px"><div class="toolbar"><div class="search"><span class="ms">search</span><input id="pesQ" data-in="pesQ" placeholder="Cari nama / nomor..." value="' + esc(S.pes.q) + '" autocomplete="off"></div>' +
+      '<div class="card"><div class="toolbar between" style="justify-content:space-between;margin-bottom:14px"><div class="toolbar"><div class="search"><span class="ms">search</span><input id="pesQ" data-in="pesQ" placeholder="Cari nama / nomor / email..." value="' + esc(S.pes.q) + '" autocomplete="off"></div>' +
       '<select class="inp fit" data-ch="pesGrup">' + grupOpt + '</select><select class="inp fit" data-ch="pesStatus"><option value="">Semua status</option><option' + (S.pes.status === 'Aktif' ? ' selected' : '') + '>Aktif</option><option' + (S.pes.status === 'Nonaktif' ? ' selected' : '') + '>Nonaktif</option></select></div>' +
       '<div class="toolbar"><button class="btn d sm' + (nSel ? '' : ' hide') + '" id="pesHapusSel" data-act="pesHapusSel">' + ic('delete', 'sm') + 'Hapus Terpilih (' + nSel + ')</button><button class="btn o" data-act="pesTambah">' + ic('add') + 'Tambah Manual</button></div></div>' +
       '<div id="pesTbl">' + V.pesTable() + '</div></div>';
   };
 
   V.modalPeserta = function (p) {
-    p = p || { nama: '', nomor: '', grup: '', status: 'Aktif' };
+    p = p || { nama: '', nomor: '', grup: '', status: 'Aktif', email: '' };
     var gl = grupList().map(function (g) { return '<option value="' + esc(g.nama) + '">'; }).join('');
     return '<div class="mh"><div class="mi">' + ic('person_add', 'lg') + '</div><div><h3>' + (p.id ? 'Ubah Peserta' : 'Tambah Peserta') + '</h3><p>Nomor otomatis dirapikan ke format 62…</p></div></div>' +
       '<div class="mb"><div class="field"><label class="lbl">Nama</label><input class="inp" id="pmNama" value="' + esc(p.nama) + '" placeholder="Budi Santoso"></div>' +
       '<div class="field"><label class="lbl">Nomor WhatsApp</label><input class="inp" id="pmNomor" value="' + esc(p.nomor) + '" placeholder="081234567890" inputmode="tel"></div>' +
+      '<div class="field"><label class="lbl">Email <span class="sub">(opsional, untuk undangan Google Calendar)</span></label><input class="inp" id="pmEmail" type="email" value="' + esc(p.email || '') + '" placeholder="budi@gmail.com" autocomplete="off"></div>' +
       '<div class="g2" style="gap:12px"><div class="field"><label class="lbl">Grup / Segmen</label><input class="inp" id="pmGrup" list="pmGrupL" value="' + esc(p.grup) + '" placeholder="Umum"><datalist id="pmGrupL">' + gl + '</datalist></div>' +
       '<div class="field"><label class="lbl">Status</label><select class="inp" id="pmStatus"><option' + (p.status === 'Aktif' ? ' selected' : '') + '>Aktif</option><option' + (p.status === 'Nonaktif' ? ' selected' : '') + '>Nonaktif</option></select></div></div>' +
       '<p id="pmErr" class="sub hide" style="color:var(--err)"></p></div>' +
@@ -176,17 +177,18 @@
       var pv = tot ? (v / tot) * 100 : 0, pd = tot ? (d / tot) * 100 : 0, pb = tot ? (bad / tot) * 100 : 0;
       ringkasan = '<div class="valid"><div class="row between"><b style="font-size:11px;letter-spacing:.06em;color:var(--ok-d)">RINGKASAN VALIDASI DATA</b><b style="font-size:12px">' + num(tot) + ' data terbaca</b></div>' +
         '<div class="bar"><i style="width:' + pv + '%;background:var(--ok-d)"></i><i style="width:' + pd + '%;background:#f59e0b"></i><i style="width:' + pb + '%;background:var(--err)"></i></div>' +
-        '<div class="nums"><div><b style="color:var(--ok-d)">' + num(v) + ' Valid</b>Siap diimpor</div><div><b style="color:#92400e">' + num(d) + ' Duplikat</b>Akan dilewati</div><div><b style="color:var(--fail)">' + num(bad) + ' Tidak valid</b>Nomor keliru</div></div></div>' +
+        '<div class="nums"><div><b style="color:var(--ok-d)">' + num(v) + ' Valid</b>Siap diimpor</div><div><b style="color:#92400e">' + num(d) + ' Duplikat</b>Akan dilewati</div><div><b style="color:var(--fail)">' + num(bad) + ' Tidak valid</b>Nomor keliru</div></div>' +
+        (st.upd ? '<p class="sub" style="margin-top:10px;color:var(--ok-d)">' + ic('mail', 'sm') + ' ' + num(st.upd) + ' peserta lama akan dilengkapi emailnya.</p>' : '') + '</div>' +
         (st.contoh && st.contoh.length ? '<p class="sub" style="margin-top:10px">Contoh: ' + st.contoh.map(function (c) { return esc(c.nama || '-') + ' (' + fmtNo(c.nomor) + ')'; }).join(', ') + '</p>' : '');
     }
     var isi = tab === 'file' ?
-      '<div class="drop" id="dropZone" data-act="pilihFile"><div class="ci">' + ic('cloud_upload', 'xl') + '</div><div style="font-weight:600">Tarik file Excel/CSV ke sini atau <u>klik memilih file</u></div><div class="sub" style="margin-top:4px">Format: .xlsx, .xls, .csv (kolom: nama, nomor, grup)</div>' +
+      '<div class="drop" id="dropZone" data-act="pilihFile"><div class="ci">' + ic('cloud_upload', 'xl') + '</div><div style="font-weight:600">Tarik file Excel/CSV ke sini atau <u>klik memilih file</u></div><div class="sub" style="margin-top:4px">Format: .xlsx, .xls, .csv (kolom: nama, nomor, grup, email)</div>' +
       (st.namaFile ? '<div class="badge b-ok" style="margin-top:12px;background:#fff">' + ic('task_alt', 'sm') + esc(st.namaFile) + '</div>' : '') + '</div><input type="file" id="fileImp" accept=".xlsx,.xls,.csv,.txt" class="hide">' :
       '<textarea class="inp" id="pasteImp" rows="7" placeholder="Salin sel dari Google Sheets / Excel lalu tempel di sini.&#10;Satu baris per peserta: Nama [tab] Nomor [tab] Grup" style="font-family:ui-monospace,Menlo,monospace;font-size:12px"></textarea><button class="btn o sm" style="margin-top:8px" data-act="bacaPaste">' + ic('fact_check', 'sm') + 'Periksa Data</button>';
     return '<div class="mh"><div class="mi">' + ic('group_add', 'lg') + '</div><div class="grow"><h3>Impor Data Peserta</h3><p>Sinkronkan nomor kontak untuk broadcast serentak</p></div><button class="ibtn" data-act="tutup">' + ic('close') + '</button></div>' +
       '<div class="mb"><div class="tabs" style="width:100%;margin:8px 0 14px"><button class="grow ' + (tab === 'file' ? 'on' : '') + '" data-act="impTab" data-t="file">' + ic('table_chart', 'sm') + ' Unggah Excel / CSV</button><button class="grow ' + (tab === 'paste' ? 'on' : '') + '" data-act="impTab" data-t="paste">' + ic('content_paste', 'sm') + ' Tempel dari Sheets</button></div>' + isi + ringkasan +
       '<div class="field" style="margin-top:16px"><label class="lbl">Tambahkan ke Grup / Segmen (bila kolom grup kosong)</label><input class="inp" id="impGrup" list="impGrupL" value="' + esc(st.grup || 'Umum') + '"><datalist id="impGrupL">' + gl.map(function (g) { return '<option value="' + esc(g.nama) + '">'; }).join('') + '</datalist></div></div>' +
-      '<div class="mf"><button class="btn o" data-act="tutup">Batal</button><button class="btn p" data-act="impSimpan"' + (st.valid ? '' : ' disabled') + '>' + ic('check') + 'Simpan ' + (st.valid ? num(st.valid) + ' ' : '') + 'Peserta</button></div>';
+      '<div class="mf"><button class="btn o" data-act="tutup">Batal</button><button class="btn p" data-act="impSimpan"' + ((st.valid || st.upd) ? '' : ' disabled') + '>' + ic('check') + 'Simpan ' + (st.valid ? num(st.valid) + ' Peserta' : num(st.upd) + ' Email') + '</button></div>';
   };
 
   /* ============================ TEMPLATE ============================ */
@@ -412,6 +414,60 @@
       '<div class="card"><div class="row between wrap" style="margin-bottom:14px"><div><h2 class="h2" style="font-size:18px">Riwayat Pengiriman</h2><span class="sub">Detail per penerima</span></div><div class="toolbar"><div class="search"><span class="ms">search</span><input id="rwQ" data-in="rwQ" placeholder="Cari nama / nomor…" value="' + esc(S.rw.q) + '" autocomplete="off"></div>' +
       '<select class="inp fit" data-ch="rwKamp" style="max-width:200px">' + opsiK + '</select><select class="inp fit" data-ch="rwStatus">' + opsiS + '</select>' +
       '<input class="inp fit" type="date" data-ch="rwTgl1" value="' + esc(S.rw.tgl1) + '" title="Dari tanggal"><input class="inp fit" type="date" data-ch="rwTgl2" value="' + esc(S.rw.tgl2) + '" title="Sampai tanggal"></div></div><div id="rwTbl">' + V.rwTable() + '</div></div>';
+  };
+
+  /* ============================ AGENDA ============================ */
+  var REM_OPT = [[10080, '1 minggu'], [4320, '3 hari'], [1440, '1 hari'], [180, '3 jam'], [60, '1 jam'], [30, '30 menit'], [10, '10 menit']];
+  var EMAIL_OPT = [[0, 'Tidak kirim'], [1440, '1 hari sebelum'], [180, '3 jam sebelum'], [60, '1 jam sebelum'], [30, '30 menit sebelum']];
+  function durasi(m) { m = +m; return m >= 1440 ? (m / 1440) + ' hari' : m >= 60 ? (m / 60) + ' jam' : m + ' mnt'; }
+  function tamuHitung() {
+    var a = S.ag, seen = {}, n = 0, tanpa = 0;
+    S.peserta.forEach(function (p) {
+      if (p.status !== 'Aktif') return;
+      if (a.mode === 'grup' && a.grup.indexOf(p.grup) < 0) return;
+      if (p.email && !seen[p.email]) { seen[p.email] = 1; n++; } else if (!p.email) tanpa++;
+    });
+    return { n: n, tanpa: tanpa };
+  }
+  SB.tamuHitung = tamuHitung;
+  V.agInfo = function () {
+    var t = tamuHitung();
+    return '<div class="agbox ' + (t.n ? 'ok' : 'warn') + '">' + ic(t.n ? 'mark_email_read' : 'warning') + '<div><b>' + num(t.n) + ' peserta akan menerima undangan</b>' +
+      '<span>' + (t.tanpa ? num(t.tanpa) + ' peserta aktif lain belum punya email dan dilewati. ' : 'Semua peserta pada target ini punya email. ') +
+      '<a href="#/peserta" class="lnk">Lengkapi email</a></span></div></div>';
+  };
+  V.agenda = function () {
+    var a = S.ag, gl = grupList();
+    var list = S.agenda.slice().sort(function (x, y) { return x.mulai < y.mulai ? 1 : -1; });
+    var nAktif = list.filter(function (x) { return x.status === 'Aktif'; }).length;
+    var mode = '<div class="tabs"><button class="' + (a.mode === 'semua' ? 'on' : '') + '" data-act="agMode" data-m="semua">Semua Peserta</button><button class="' + (a.mode === 'grup' ? 'on' : '') + '" data-act="agMode" data-m="grup">Per Grup</button></div>';
+    var grup = a.mode === 'grup' ? '<div class="segs" style="margin-top:10px">' + (gl.length ? gl.map(function (g) { return '<button class="' + (a.grup.indexOf(g.nama) > -1 ? 'on' : '') + '" data-act="agGrup" data-g="' + esc(g.nama) + '">' + esc(g.nama) + ' <b>' + g.n + '</b></button>'; }).join('') : '<span class="sub">Belum ada grup.</span>') + '</div>' : '';
+    var rem = '<div class="segs">' + REM_OPT.map(function (o) { return '<button class="' + (a.rem.indexOf(o[0]) > -1 ? 'on' : '') + '" data-act="agRem" data-m="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>';
+    var em = '<div class="segs">' + EMAIL_OPT.map(function (o) { return '<button class="' + (a.email === o[0] ? 'on' : '') + '" data-act="agEmail" data-m="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>';
+    var form = '<div class="card"><div class="row gap8" style="margin-bottom:14px"><div class="mi" style="width:40px;height:40px">' + ic('event_available') + '</div><div><h2 class="h2" style="font-size:18px">Buat Agenda &amp; Undangan Kalender</h2><span class="sub">Peserta menerima undangan di email dan Google Calendar mereka</span></div></div>' +
+      '<div class="field"><label class="lbl">Nama Agenda</label><input class="inp" data-in="agJudul" value="' + esc(a.judul) + '" placeholder="Webinar AI Automation" maxlength="120"></div>' +
+      '<div class="g2" style="gap:12px"><div class="field"><label class="lbl">Mulai</label><input class="inp" type="datetime-local" data-in="agMulai" data-ch="agMulai" value="' + esc(a.mulai) + '"></div>' +
+      '<div class="field"><label class="lbl">Selesai</label><input class="inp" type="datetime-local" data-in="agSelesai" value="' + esc(a.selesai) + '"></div></div>' +
+      '<div class="field"><label class="lbl">Lokasi / Link meeting <span class="sub">(opsional)</span></label><input class="inp" data-in="agLokasi" value="' + esc(a.lokasi) + '" placeholder="Zoom: https://zoom.us/j/..." maxlength="200"></div>' +
+      '<div class="field"><label class="lbl">Deskripsi <span class="sub">(opsional)</span></label><textarea class="inp" rows="3" data-in="agDeskripsi" placeholder="Materi, yang perlu disiapkan, dll." maxlength="2000">' + esc(a.deskripsi) + '</textarea></div>' +
+      '<div class="field"><label class="lbl">Undang</label>' + mode + grup + '</div><div id="agInfo">' + V.agInfo() + '</div>' +
+      '<div class="field" style="margin-top:14px"><label class="lbl">Pengingat di Google Calendar <span class="sub">(maks. 5)</span></label>' + rem + '</div>' +
+      '<div class="field"><label class="lbl">Email pengingat tambahan dari SiBlast</label>' + em + '<span class="sub" style="display:block;margin-top:6px">Dikirim otomatis oleh server (akurasi ±5 menit). Memakai kuota email harian akun Google Anda.</span></div>' +
+      '<button class="btn p" id="agKirim" data-act="agSimpan" style="width:100%;justify-content:center"' + (a.busy ? ' disabled' : '') + '>' + ic('calendar_month') + 'Buat Agenda &amp; Kirim Undangan</button></div>';
+    var kartu = list.map(function (x) {
+      var aktif = x.status === 'Aktif', tmp = x.id.indexOf('tmp_') === 0;
+      var em2 = x.email_pengingat > 0 ? ' · Email: ' + (x.email_terkirim === '1' ? 'terkirim' : x.email_terkirim === 'lewat' ? 'terlewat' : durasi(x.email_pengingat) + ' sebelum') : '';
+      return '<div class="agcard' + (aktif ? '' : ' off') + '"><div class="row between"><b class="agt">' + esc(x.judul) + '</b>' + SB.badge(tmp ? 'Membuat' : x.status) + '</div>' +
+        '<div class="agm">' + ic('schedule', 'sm') + ' ' + esc(SB.tgl(x.mulai, true)) + '</div>' +
+        (x.lokasi ? '<div class="agm">' + ic('location_on', 'sm') + ' ' + esc(x.lokasi) + '</div>' : '') +
+        '<div class="agm">' + ic('group', 'sm') + ' ' + num(x.tamu) + ' undangan · ' + esc(x.grup_target === 'Semua' ? 'Semua peserta' : x.grup_target) + '</div>' +
+        '<div class="agm">' + ic('notifications_active', 'sm') + ' Kalender: ' + esc(String(x.pengingat).split(',').map(durasi).join(', ')) + em2 + '</div>' +
+        (aktif && !tmp ? '<div class="acts" style="margin-top:10px"><button class="btn o sm" data-act="agMailSekarang" data-id="' + esc(x.id) + '">' + ic('mail', 'sm') + 'Kirim pengingat email sekarang</button><button class="btn d sm" data-act="agBatal" data-id="' + esc(x.id) + '">' + ic('event_busy', 'sm') + 'Batalkan</button></div>' : '') + '</div>';
+    }).join('');
+    var kanan = '<div class="card"><div class="row between"><div><h2 class="h2" style="font-size:18px">Daftar Agenda</h2><span class="sub">Undangan yang pernah dibuat</span></div><span class="pill">' + nAktif + ' aktif</span></div><div style="margin-top:14px" class="aglist">' +
+      (list.length ? kartu : SB.emptyBox('event', 'Belum ada agenda', 'Isi formulir di samping untuk membuat agenda pertama.')) + '</div></div>';
+    return pageHead('Agenda &amp; Pengingat Kalender', 'Kirim undangan Google Calendar agar peserta mendapat notifikasi pengingat agenda.', '', num(list.length) + ' agenda') +
+      '<div class="split">' + form + kanan + '</div>';
   };
 
   /* ============================ PENGATURAN ============================ */

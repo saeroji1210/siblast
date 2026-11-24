@@ -401,7 +401,7 @@
       return '<tr><td style="white-space:nowrap">' + (r.waktu ? tgl(r.waktu, true) : '-') + '</td><td><b style="font-weight:600">' + esc(jd[r.kampanye_id] || r.kampanye_id) + '</b></td><td><div class="cell">' + avatar(r.nama || r.nomor, 30) + '<span>' + esc(r.nama || '-') + '</span></div></td><td class="mono">' + fmtNo(r.nomor) + '</td><td>' + badge(r.status) + '</td><td class="sub" style="color:' + (r.error ? 'var(--fail)' : 'var(--text2)') + '">' + esc(r.error || '') + '</td></tr>';
     }).join('') + '</tbody></table></div>' + pager(list.length, S.rw.page, per, 'rwHal');
   };
-  V.riwayat = function () {
+  V.riwayatWa = function () {
     var K = S.kampanye, kron = urut(K), thn = new Date().getFullYear(), ter = [], gag = [];
     for (var i = 0; i < 12; i++) { ter.push(0); gag.push(0); }
     K.forEach(function (k) { var d = new Date(k.waktu_mulai); if (isNaN(d) || d.getFullYear() !== thn) return; ter[d.getMonth()] += +k.terkirim || 0; gag[d.getMonth()] += +k.gagal || 0; });
@@ -414,6 +414,55 @@
       '<div class="card"><div class="row between wrap" style="margin-bottom:14px"><div><h2 class="h2" style="font-size:18px">Riwayat Pengiriman</h2><span class="sub">Detail per penerima</span></div><div class="toolbar"><div class="search"><span class="ms">search</span><input id="rwQ" data-in="rwQ" placeholder="Cari nama / nomor…" value="' + esc(S.rw.q) + '" autocomplete="off"></div>' +
       '<select class="inp fit" data-ch="rwKamp" style="max-width:200px">' + opsiK + '</select><select class="inp fit" data-ch="rwStatus">' + opsiS + '</select>' +
       '<input class="inp fit" type="date" data-ch="rwTgl1" value="' + esc(S.rw.tgl1) + '" title="Dari tanggal"><input class="inp fit" type="date" data-ch="rwTgl2" value="' + esc(S.rw.tgl2) + '" title="Sampai tanggal"></div></div><div id="rwTbl">' + V.rwTable() + '</div></div>';
+  };
+
+  /* ---- riwayat agenda & email ---- */
+  var JENIS_AG = ['Undangan Kalender', 'Email Pengingat', 'Pembatalan Kalender'];
+  var JENIS_IKON = { 'Undangan Kalender': 'calendar_month', 'Email Pengingat': 'mail', 'Pembatalan Kalender': 'event_busy' };
+  SB.rwaFiltered = function () {
+    var f = S.rwa, q = f.q.trim().toLowerCase(), t1 = f.tgl1 ? Date.parse(f.tgl1 + 'T00:00:00') : 0, t2 = f.tgl2 ? Date.parse(f.tgl2 + 'T23:59:59') : 9e15;
+    return (S.logAg || []).filter(function (r) {
+      if (f.agenda && r.agenda_id !== f.agenda) return false;
+      if (f.jenis && r.jenis !== f.jenis) return false;
+      if (f.status && r.status !== f.status) return false;
+      if (t1 || f.tgl2) { var t = Date.parse(r.waktu || ''); if (isNaN(t) || t < t1 || t > t2) return false; }
+      return !q || (r.nama + ' ' + r.email + ' ' + r.judul).toLowerCase().indexOf(q) > -1;
+    }).slice().reverse();
+  };
+  V.rwaTable = function () {
+    if (S.logAg === null) return SB.skeleton(6);
+    var list = SB.rwaFiltered(), per = 12, pages = Math.max(1, Math.ceil(list.length / per));
+    if (S.rwa.page > pages) S.rwa.page = pages;
+    if (!S.logAg.length) return SB.emptyBox('history', 'Belum ada riwayat agenda', 'Jejak undangan kalender dan email pengingat muncul setelah Anda membuat agenda.', '<button class="btn p" data-act="go" data-r="agenda">' + ic('calendar_month') + 'Buat Agenda</button>');
+    if (!list.length) return SB.emptyBox('search_off', 'Tidak ada data', 'Ubah filter pencarian Anda.');
+    var cur = list.slice((S.rwa.page - 1) * per, S.rwa.page * per);
+    return '<div class="tw"><table><thead><tr><th>Waktu</th><th>Agenda</th><th>Jenis</th><th>Penerima</th><th>Email</th><th>Status</th><th>Keterangan</th></tr></thead><tbody>' + cur.map(function (r) {
+      return '<tr><td style="white-space:nowrap">' + (r.waktu ? tgl(r.waktu, true) : '-') + '</td><td><b style="font-weight:600">' + esc(r.judul) + '</b></td>' +
+        '<td><span class="pill">' + ic(JENIS_IKON[r.jenis] || 'event', 'sm') + ' ' + esc(r.jenis) + '</span></td>' +
+        '<td><div class="cell">' + avatar(r.nama || r.email, 30) + '<span>' + esc(r.nama || '-') + '</span></div></td><td><span class="mail">' + esc(r.email) + '</span></td>' +
+        '<td>' + badge(r.status) + '</td><td class="sub" style="color:' + (r.error ? 'var(--fail)' : 'var(--text2)') + '">' + esc(r.error || '') + '</td></tr>';
+    }).join('') + '</tbody></table></div>' + pager(list.length, S.rwa.page, per, 'rwaHal');
+  };
+  V.riwayatAgenda = function () {
+    var L = S.logAg || [], n = function (j, s) { return L.filter(function (x) { return x.jenis === j && (!s || x.status === s); }).length; };
+    var kartu = '<div class="kpis"><div class="kpi k-lav"><div class="ico">' + ic('calendar_month', 'lg') + '</div><div><div class="n">' + num(n('Undangan Kalender')) + '</div><div class="l">Undangan Kalender</div></div></div>' +
+      '<div class="kpi k-mint"><div class="ico">' + ic('mark_email_read', 'lg') + '</div><div><div class="n">' + num(n('Email Pengingat', 'Terkirim')) + '</div><div class="l">Email Terkirim</div></div></div>' +
+      '<div class="kpi k-pink"><div class="ico">' + ic('error', 'lg') + '</div><div><div class="n">' + num(L.filter(function (x) { return x.status === 'Gagal'; }).length) + '</div><div class="l">Gagal</div></div></div>' +
+      '<div class="kpi k-peach"><div class="ico">' + ic('event_busy', 'lg') + '</div><div><div class="n">' + num(n('Pembatalan Kalender')) + '</div><div class="l">Pemberitahuan Batal</div></div></div></div>';
+    var ag = {}; L.forEach(function (x) { ag[x.agenda_id] = x.judul; });
+    var opsiA = '<option value="">Semua agenda</option>' + Object.keys(ag).reverse().map(function (id) { return '<option value="' + esc(id) + '"' + (S.rwa.agenda === id ? ' selected' : '') + '>' + esc(ag[id]) + '</option>'; }).join('');
+    var opsiJ = '<option value="">Semua jenis</option>' + JENIS_AG.map(function (j) { return '<option' + (S.rwa.jenis === j ? ' selected' : '') + '>' + j + '</option>'; }).join('');
+    var opsiS = ['', 'Diundang', 'Terkirim', 'Gagal', 'Diberitahu'].map(function (s) { return '<option value="' + s + '"' + (S.rwa.status === s ? ' selected' : '') + '>' + (s || 'Semua status') + '</option>'; }).join('');
+    return pageHead('Riwayat &amp; Laporan', 'Jejak undangan Google Calendar dan email pengingat per penerima.', '<button class="btn s" data-act="rwaExcel">' + ic('table_view') + 'Unduh Excel</button><button class="btn s" data-act="rwaPdf">' + ic('picture_as_pdf') + 'Unduh PDF</button>') + kartu +
+      '<div class="card"><div class="row between wrap" style="margin-bottom:14px"><div><h2 class="h2" style="font-size:18px">Riwayat Agenda &amp; Email</h2><span class="sub">"Diundang" berarti undangan telah dikirim Google Calendar; kehadiran dan pembukaan email tidak dapat dilacak.</span></div>' +
+      '<div class="toolbar"><div class="search"><span class="ms">search</span><input data-in="rwaQ" placeholder="Cari nama / email..." value="' + esc(S.rwa.q) + '" autocomplete="off"></div>' +
+      '<select class="inp fit" data-ch="rwaAg" style="max-width:200px">' + opsiA + '</select><select class="inp fit" data-ch="rwaJenis">' + opsiJ + '</select><select class="inp fit" data-ch="rwaStatus">' + opsiS + '</select>' +
+      '<input class="inp fit" type="date" data-ch="rwaTgl1" value="' + esc(S.rwa.tgl1) + '" title="Dari tanggal"><input class="inp fit" type="date" data-ch="rwaTgl2" value="' + esc(S.rwa.tgl2) + '" title="Sampai tanggal"></div></div><div id="rwaTbl">' + V.rwaTable() + '</div></div>';
+  };
+  V.riwayat = function () {
+    var t = S.rw.tab === 'ag' ? 'ag' : 'wa';
+    return '<div class="tabs" style="margin-bottom:16px"><button class="' + (t === 'wa' ? 'on' : '') + '" data-act="rwTab" data-t="wa">' + ic('send', 'sm') + ' Broadcast WhatsApp</button><button class="' + (t === 'ag' ? 'on' : '') + '" data-act="rwTab" data-t="ag">' + ic('calendar_month', 'sm') + ' Agenda &amp; Email</button></div>' +
+      (t === 'ag' ? V.riwayatAgenda() : V.riwayatWa());
   };
 
   /* ============================ AGENDA ============================ */

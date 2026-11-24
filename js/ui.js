@@ -19,13 +19,14 @@
   /* ---------- state global ---------- */
   SB.S = {
     user: { nama: 'Admin' }, settings: {}, rahasia: {}, gw: null,
-    peserta: [], template: [], kampanye: [], agenda: [], riwayat: null, riwayatBasi: true,
+    peserta: [], template: [], kampanye: [], agenda: [], riwayat: null, riwayatBasi: true, logAg: null, logAgBasi: true,
     loaded: false, route: 'dashboard',
     pes: { q: '', grup: '', status: '', page: 1, sel: {} },
     tpl: { q: '', kat: 'Semua', draft: null },
     ag: { judul: '', deskripsi: '', lokasi: '', mulai: '', selesai: '', mode: 'semua', grup: [], rem: [60], email: 60, busy: false },
     wz: { step: 1, judul: '', tplId: '', mode: 'semua', grup: [], ids: {}, q: '', jadwalOn: false, jadwal: '' },
-    rw: { q: '', kampanye: '', status: '', tgl1: '', tgl2: '', page: 1 }
+    rw: { q: '', kampanye: '', status: '', tgl1: '', tgl2: '', page: 1, tab: 'wa' },
+    rwa: { q: '', agenda: '', jenis: '', status: '', tgl1: '', tgl2: '', page: 1 }
   };
   SB.PG = { id: null, muat: null, rows: {}, hitung: null, wait: 0, filter: 'semua', batch: 25 };
 
@@ -74,7 +75,7 @@
   var BADGE = {
     Selesai: ['ok', 'Selesai'], Berjalan: ['run', 'Berjalan'], Terjadwal: ['pend', 'Terjadwal'], Dijeda: ['pend', 'Dijeda'],
     Dihentikan: ['fail', 'Dihentikan'], Berhasil: ['ok', 'Terkirim'], Gagal: ['fail', 'Gagal'], Menunggu: ['pend', 'Menunggu'],
-    Dibatalkan: ['draft', 'Dibatalkan'], Membuat: ['run', 'Membuat…'], Aktif: ['ok', 'Aktif'], Nonaktif: ['draft', 'Nonaktif']
+    Dibatalkan: ['draft', 'Dibatalkan'], Membuat: ['run', 'Membuat…'], Diundang: ['ok', 'Diundang'], Diberitahu: ['pend', 'Diberitahu'], Aktif: ['ok', 'Aktif'], Nonaktif: ['draft', 'Nonaktif']
   };
   SB.badge = function (st) {
     var b = BADGE[st] || ['draft', st || '-'];

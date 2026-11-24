@@ -49,7 +49,7 @@
     $('#view').innerHTML = V[c.r]();
     if (lastRoute !== c.r) { $('#main').scrollTop = 0; lastRoute = c.r; }
     navSet(); chip();
-    if (c.r === 'riwayat') ensureRiwayat();
+    if (c.r === 'riwayat') { ensureRiwayat(); if (S.rw.tab === 'ag') ensureLogAgenda(); }
     if (c.r === 'progres') ensureProgres();
   }
   function renderKeep() {
@@ -138,6 +138,16 @@
     var aktif = DR.running;
     terapkan(Object.assign({}, r, aktif ? { kampanye: null } : {}));
     renderKeep(); kickDriver();
+  }
+  function ensureLogAgenda() {
+    if (S.logAg === null) { var c = API.LS.get('sb_rwa'); if (c) S.logAg = c; }
+    if (S.logAg === null || S.logAgBasi) {
+      API.call('listLogAgenda').then(function (r) {
+        if (!r.ok) return;
+        S.logAg = r.rows; S.logAgBasi = false; API.LS.set('sb_rwa', r.rows.slice(-1500));
+        if (S.route === 'riwayat' && S.rw.tab === 'ag') { var t = $('#rwaTbl'); if (t) renderKeep(); }
+      });
+    }
   }
   function prefetchRiwayat() { if (S.riwayat === null) ensureRiwayat(true); }
   function ensureRiwayat(senyap) {
@@ -256,8 +266,8 @@
   function keluar() {
     API.call('logout').catch(function () {});
     API.setToken('');
-    ['sb_data', 'sb_riw'].forEach(API.LS.del);
-    S.loaded = false; S.riwayat = null; S.peserta = []; S.template = []; S.kampanye = []; S.agenda = []; S.gw = null; setPG(null);
+    ['sb_data', 'sb_riw', 'sb_rwa'].forEach(API.LS.del);
+    S.loaded = false; S.riwayat = null; S.logAg = null; S.logAgBasi = true; S.peserta = []; S.template = []; S.kampanye = []; S.agenda = []; S.gw = null; setPG(null);
     showLogin();
   }
   API.onAuthLost = function () { if (S.loggedIn) { API.setToken(''); showLogin('Sesi berakhir, silakan masuk lagi.'); } };
@@ -507,7 +517,7 @@
     if (!r.ok) { S.agenda = S.agenda.filter(function (x) { return x.id !== tmp.id; }); render(); return toast(r.message || 'Gagal membuat agenda', 'err'); }
     S.agenda = S.agenda.map(function (x) { return x.id === tmp.id ? r.item : x; });
     Object.assign(a, { judul: '', deskripsi: '', lokasi: '', mulai: '', selesai: '' }); agDefault();
-    persist(); render(); toast('Agenda dibuat — ' + r.tamu + ' undangan dikirim');
+    S.logAgBasi = true; persist(); render(); toast('Agenda dibuat — ' + r.tamu + ' undangan dikirim');
   };
   ACT.agBatal = async function (el) {
     var id = el.getAttribute('data-id'), x = S.agenda.filter(function (k) { return k.id === id; })[0]; if (!x) return;
@@ -515,13 +525,13 @@
     var prev = S.agenda.slice();
     S.agenda = S.agenda.map(function (k) { return k.id === id ? Object.assign({}, k, { status: 'Dibatalkan' }) : k; }); render(); toast('Agenda dibatalkan'); pending++;
     var r = await API.call('hapusAgenda', { id: id }); pending--;
-    if (!r.ok) { S.agenda = prev; render(); toast(r.message || 'Gagal membatalkan agenda', 'err'); } else persist();
+    if (!r.ok) { S.agenda = prev; render(); toast(r.message || 'Gagal membatalkan agenda', 'err'); } else { S.logAgBasi = true; persist(); }
   };
   ACT.agMailSekarang = async function (el) {
     var id = el.getAttribute('data-id'), x = S.agenda.filter(function (k) { return k.id === id; })[0]; if (!x) return;
     if (!await SB.confirm('Kirim pengingat email?', 'Email pengingat "' + x.judul + '" dikirim sekarang ke ' + x.tamu + ' peserta.', 'Kirim Sekarang')) return;
     el.disabled = true; toast('Mengirim email pengingat…', 'info');
-    var r = await API.call('kirimPengingatAgenda', { id: id }); el.disabled = false;
+    var r = await API.call('kirimPengingatAgenda', { id: id }); el.disabled = false; S.logAgBasi = true;
     if (!r.ok) return toast(r.message || 'Gagal mengirim pengingat', 'err');
     toast(r.kirim + ' email terkirim' + (r.gagal ? ', ' + r.gagal + ' gagal' : ''), r.gagal ? 'warn' : 'ok');
   };
@@ -676,12 +686,36 @@
       var wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Riwayat'); X.writeFile(wb, 'riwayat-siblast-' + tgl + '.xlsx'); toast('Excel diunduh');
     } catch (e) { SB.unduhTeks('riwayat-siblast-' + tgl + '.csv', SB.csv(d)); toast('Pustaka Excel tidak tersedia — diunduh sebagai CSV', 'warn'); }
   };
-  ACT.rwPdf = function () {
-    var d = dataLaporan(); if (d.length < 2) return toast('Tidak ada data untuk diunduh', 'warn');
+  function cetakPdf(judul, d) {
+    if (d.length < 2) return toast('Tidak ada data untuk diunduh', 'warn');
     var w = window.open('', '_blank'); if (!w) return toast('Izinkan pop-up untuk mengunduh PDF', 'warn');
-    var h = '<html><head><meta charset="utf-8"><title>Laporan SiBlast</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#161a2f}h2{margin:0 0 4px}p{color:#666;margin:0 0 16px;font-size:12px}table{border-collapse:collapse;width:100%;font-size:11px}th{background:#ececff;text-align:left}th,td{border:1px solid #d8dbe9;padding:6px 8px}tr:nth-child(even) td{background:#fafbff}</style></head><body><h2>Laporan Pengiriman SiBlast</h2><p>Dibuat ' + esc(SB.tgl(new Date().toISOString(), true)) + ' · ' + (d.length - 1) + ' baris</p><table><thead><tr>' + d[0].map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>' + d.slice(1).map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table><script>setTimeout(function(){window.print()},300)<\/script></body></html>';
+    var h = '<html><head><meta charset="utf-8"><title>' + esc(judul) + '</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#161a2f}h2{margin:0 0 4px}p{color:#666;margin:0 0 16px;font-size:12px}table{border-collapse:collapse;width:100%;font-size:11px}th{background:#ececff;text-align:left}th,td{border:1px solid #d8dbe9;padding:6px 8px}tr:nth-child(even) td{background:#fafbff}</style></head><body><h2>' + esc(judul) + '</h2><p>Dibuat ' + esc(SB.tgl(new Date().toISOString(), true)) + ' · ' + (d.length - 1) + ' baris</p><table><thead><tr>' + d[0].map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>' + d.slice(1).map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table><script>setTimeout(function(){window.print()},300)<\/script></body></html>';
     w.document.write(h); w.document.close(); toast('Pilih "Simpan sebagai PDF" pada dialog cetak', 'info');
+  }
+  ACT.rwPdf = function () { cetakPdf('Laporan Pengiriman SiBlast', dataLaporan()); };
+
+  /* ---------- Riwayat agenda & email ---------- */
+  function rwaUlang() { var t = $('#rwaTbl'); if (t) t.innerHTML = V.rwaTable(); }
+  ACT.rwTab = function (el) { S.rw.tab = el.getAttribute('data-t'); render(); };
+  IN.rwaQ = jeda(function (t) { S.rwa.q = t.value; S.rwa.page = 1; rwaUlang(); }, 100);
+  CH.rwaAg = function (t) { S.rwa.agenda = t.value; S.rwa.page = 1; rwaUlang(); };
+  CH.rwaJenis = function (t) { S.rwa.jenis = t.value; S.rwa.page = 1; rwaUlang(); };
+  CH.rwaStatus = function (t) { S.rwa.status = t.value; S.rwa.page = 1; rwaUlang(); };
+  CH.rwaTgl1 = function (t) { S.rwa.tgl1 = t.value; S.rwa.page = 1; rwaUlang(); };
+  CH.rwaTgl2 = function (t) { S.rwa.tgl2 = t.value; S.rwa.page = 1; rwaUlang(); };
+  ACT.rwaHal = function (el) { S.rwa.page = +el.getAttribute('data-p') || 1; rwaUlang(); };
+  function dataLaporanAg() {
+    return [['Waktu', 'Agenda', 'Jenis', 'Nama', 'Email', 'Status', 'Keterangan']].concat(SB.rwaFiltered().slice(0, 5000).map(function (r) { return [r.waktu ? SB.tgl(r.waktu, true) : '-', r.judul, r.jenis, r.nama, r.email, r.status, r.error]; }));
+  }
+  ACT.rwaExcel = async function () {
+    var d = dataLaporanAg(); if (d.length < 2) return toast('Tidak ada data untuk diunduh', 'warn');
+    var tgl = new Date().toISOString().slice(0, 10);
+    try {
+      var X = await SB.muatXLSX(), ws = X.utils.aoa_to_sheet(d); ws['!cols'] = [{ wch: 20 }, { wch: 28 }, { wch: 22 }, { wch: 22 }, { wch: 30 }, { wch: 12 }, { wch: 30 }];
+      var wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Agenda'); X.writeFile(wb, 'riwayat-agenda-siblast-' + tgl + '.xlsx'); toast('Excel diunduh');
+    } catch (e) { SB.unduhTeks('riwayat-agenda-siblast-' + tgl + '.csv', SB.csv(d)); toast('Pustaka Excel tidak tersedia — diunduh sebagai CSV', 'warn'); }
   };
+  ACT.rwaPdf = function () { cetakPdf('Laporan Agenda & Email SiBlast', dataLaporanAg()); };
 
   /* ---------- Pengaturan ---------- */
   IN.stJeda = function () {

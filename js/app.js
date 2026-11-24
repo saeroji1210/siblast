@@ -354,7 +354,7 @@
   }
   ACT.pesHapus = function (el) { var p = S.peserta.filter(function (x) { return x.id === el.getAttribute('data-id'); })[0]; if (p) hapusPeserta([p.id], 'Peserta "' + (p.nama || p.nomor) + '" akan dihapus permanen.'); };
   ACT.pesHapusSel = function () { var ids = Object.keys(S.pes.sel); if (ids.length) hapusPeserta(ids, ids.length + ' peserta terpilih akan dihapus permanen.'); };
-  ACT.unduhFormat = function () { SB.unduhTeks('format-peserta-siblast.csv', SB.csv([['nama', 'nomor', 'grup'], ['Budi Santoso', '081234567890', 'Webinar AI'], ['Siti Rahma', '082198765432', 'Umum']])); toast('Format CSV diunduh'); };
+  ACT.unduhFormat = function () { SB.unduhTeks('format-peserta-siblast.csv', SB.csv([['nama', 'nomor', 'grup', 'email'], ['Budi Santoso', '081234567890', 'Webinar AI', 'budi@gmail.com'], ['Siti Rahma', '082198765432', 'Umum', 'siti@gmail.com']])); toast('Format CSV diunduh'); };
 
   /* ---------- Impor peserta ---------- */
   var IMP = {};
